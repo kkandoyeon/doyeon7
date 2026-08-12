@@ -110,7 +110,7 @@
           <div class="hero-badge"><span class="hero-badge-dot"></span>홍보실 운영 · 사내 프로젝트 협업 포털</div>
           <h1>함께 만들고,<br><span>함께 기록하는</span><br>PROJECT HUB</h1>
           <p>프로젝트 공지, 직원 아이디어, 교육·업무 자료, 현장 사진을 한곳에서 공유하세요. 간단한 사내 회원가입 후 프로젝트 구성원으로 참여할 수 있습니다.</p>
-          <div class="hero-actions"><button class="btn btn-point" id="heroJoinBtn">프로젝트 참여하기</button><button class="btn btn-light" id="heroBoardBtn">게시판 둘러보기</button></div>
+          <div class="hero-actions"><button class="btn btn-point" id="heroJoinBtn">간편 회원가입 · 참여하기</button><button class="btn btn-light" id="heroBoardBtn">게시판 둘러보기</button></div>
         </div>
         <aside class="hero-card reveal">
           <div class="hero-card-top"><div><div class="hero-card-label">PROJECT COMMUNICATION</div><strong>소통 채널을 하나로</strong></div><span class="live-pill">● LIVE</span></div>
@@ -172,7 +172,7 @@
   <div class="modal-backdrop" id="authModal"><div class="modal"><div class="modal-head"><h3>PROJECT HUB 시작하기</h3><button class="close-btn" data-close="authModal">×</button></div><div class="modal-body">
     <div class="auth-tabs"><button class="auth-tab active" data-auth-tab="login">로그인</button><button class="auth-tab" data-auth-tab="signup">회원가입</button></div><div class="status-message" id="authMessage"></div>
     <form id="loginForm" class="form-grid"><div class="field"><label for="loginEmail">회사 이메일</label><input type="email" id="loginEmail" required autocomplete="email" placeholder="name@company.com"></div><div class="field"><label for="loginPassword">비밀번호</label><input type="password" id="loginPassword" required autocomplete="current-password" placeholder="비밀번호"></div><button class="btn btn-primary" type="submit">로그인</button></form>
-    <form id="signupForm" class="form-grid hidden"><div class="form-row"><div class="field"><label for="signupName">이름</label><input type="text" id="signupName" required maxlength="40" placeholder="홍길동"></div><div class="field"><label for="signupDepartment">부서</label><input type="text" id="signupDepartment" maxlength="60" placeholder="홍보실"></div></div><div class="field"><label for="signupEmail">회사 이메일</label><input type="email" id="signupEmail" required autocomplete="email" placeholder="name@company.com"></div><div class="field"><label for="signupPassword">비밀번호</label><input type="password" id="signupPassword" required minlength="8" autocomplete="new-password" placeholder="8자 이상 입력"><div class="form-help">Supabase Auth 비밀번호 정책을 더 강화하면 해당 설정을 따릅니다.</div></div><button class="btn btn-primary" type="submit">회원가입</button></form>
+    <form id="signupForm" class="form-grid hidden"><div class="form-row"><div class="field"><label for="signupName">이름</label><input type="text" id="signupName" required maxlength="40" placeholder="홍길동"></div><div class="field"><label for="signupDepartment">부서</label><input type="text" id="signupDepartment" maxlength="60" placeholder="홍보실"></div></div><div class="field"><label for="signupEmail">회사 이메일</label><input type="email" id="signupEmail" required autocomplete="email" placeholder="name@company.com"></div><div class="field"><label for="signupPassword">비밀번호</label><input type="password" id="signupPassword" required minlength="8" autocomplete="new-password" placeholder="8자 이상 입력"><div class="form-help">8자 이상 입력하세요. 회원가입 후 이메일 인증 없이 바로 로그인됩니다.</div></div><button class="btn btn-primary" type="submit">회원가입</button></form>
   </div></div></div>
 
   <!-- Write modal -->
@@ -219,7 +219,59 @@
       }else{document.body.classList.remove("authenticated");$("#authButton").classList.remove("hidden");$("#logoutButton").classList.add("hidden");$("#userBadge").textContent="";boardContent.innerHTML='<div class="login-gate">게시판은 로그인한 사내 구성원이 이용할 수 있습니다.</div>'}
     }
     $("#loginForm").addEventListener("submit",async e=>{e.preventDefault();const msg=$("#authMessage");clearMessage(msg);const{error}=await supabase.auth.signInWithPassword({email:$("#loginEmail").value.trim(),password:$("#loginPassword").value});if(error)return showMessage(msg,`로그인 실패: ${error.message}`,true);closeModal("authModal");showToast("로그인되었습니다.")});
-    $("#signupForm").addEventListener("submit",async e=>{e.preventDefault();const msg=$("#authMessage");clearMessage(msg);const full_name=$("#signupName").value.trim(),department=$("#signupDepartment").value.trim(),email=$("#signupEmail").value.trim(),password=$("#signupPassword").value;const{data,error}=await supabase.auth.signUp({email,password,options:{data:{full_name,department}}});if(error)return showMessage(msg,`회원가입 실패: ${error.message}`,true);if(data.session){showMessage(msg,"회원가입과 로그인이 완료되었습니다.");setTimeout(()=>closeModal("authModal"),700)}else showMessage(msg,"회원가입 요청이 완료되었습니다. 이메일 인증이 켜져 있다면 인증 메일 확인 후 로그인해 주세요.")});
+    $("#signupForm").addEventListener("submit",async e=>{
+      e.preventDefault();
+      const msg=$("#authMessage");
+      clearMessage(msg);
+
+      const full_name=$("#signupName").value.trim();
+      const department=$("#signupDepartment").value.trim();
+      const email=$("#signupEmail").value.trim();
+      const password=$("#signupPassword").value;
+
+      const submitButton=e.currentTarget.querySelector('button[type="submit"]');
+      submitButton.disabled=true;
+      submitButton.textContent="가입 중...";
+
+      try{
+        const{data,error}=await supabase.auth.signUp({
+          email,
+          password,
+          options:{data:{full_name,department}}
+        });
+
+        if(error) throw error;
+
+        /*
+          Supabase Dashboard에서 Confirm Email이 OFF이면
+          signUp() 성공과 동시에 session이 발급되어 바로 로그인됩니다.
+          Confirm Email이 ON이면 session이 null이므로
+          브라우저 코드만으로 이메일 인증을 우회할 수 없습니다.
+        */
+        if(!data.session){
+          showMessage(
+            msg,
+            "Supabase의 이메일 확인 설정이 아직 켜져 있습니다. Authentication → Sign In / Providers → Email에서 Confirm Email을 OFF로 변경한 뒤 다시 가입해 주세요.",
+            true
+          );
+          return;
+        }
+
+        showMessage(msg,"회원가입이 완료되었습니다. 바로 프로젝트에 참여할 수 있습니다.");
+        showToast("회원가입과 로그인이 완료되었습니다.");
+
+        setTimeout(()=>{
+          closeModal("authModal");
+          location.hash="boards";
+        },500);
+
+      }catch(error){
+        showMessage(msg,`회원가입 실패: ${error.message}`,true);
+      }finally{
+        submitButton.disabled=false;
+        submitButton.textContent="회원가입";
+      }
+    });
     $("#logoutButton").addEventListener("click",async()=>{const{error}=await supabase.auth.signOut();if(error)return showToast(error.message,"error");showToast("로그아웃되었습니다.");location.hash="home"});
 
     /* 대시보드 통계 */
